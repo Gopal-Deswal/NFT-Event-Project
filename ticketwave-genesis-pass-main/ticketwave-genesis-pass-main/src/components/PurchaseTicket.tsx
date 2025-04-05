@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import TicketContractABI from "../contracts/TicketContractABI.json"; // Adjust the path as needed
+import TicketContractABI from "../contracts/TicketContractABI.json"; // Ensure this path is correct
 
 const PurchaseTicket: React.FC = () => {
-  // State variables for loading, error messages, transaction hash, and ticket price
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -13,7 +12,7 @@ const PurchaseTicket: React.FC = () => {
   const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7";
   const CONTRACT_ADDRESS = "0xc4fB5755f381cdD61A28fAdA360fA26F104A542d";
 
-  // On component mount, fetch the ticket price from the contract
+  // Fetch ticket price on component mount
   useEffect(() => {
     const fetchTicketPrice = async () => {
       if (typeof window.ethereum === "undefined") {
@@ -21,19 +20,19 @@ const PurchaseTicket: React.FC = () => {
         return;
       }
       try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
+        // Using ethers v5: Web3Provider
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
         const contract = new ethers.Contract(CONTRACT_ADDRESS, TicketContractABI, provider);
         const priceBN = await contract.ticketPrice();
-        // Set the price as a string (in wei)
         setTicketPrice(priceBN.toString());
       } catch (err: any) {
         setError("Failed to fetch ticket price.");
+        console.error(err);
       }
     };
     fetchTicketPrice();
   }, []);
 
-  // Function to handle ticket purchase
   const handlePurchase = async () => {
     setError(null);
     setTxHash(null);
@@ -45,19 +44,17 @@ const PurchaseTicket: React.FC = () => {
 
     setLoading(true);
     try {
-      // Connect to MetaMask
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
       await provider.send("eth_requestAccounts", []); // Request account access
 
-      // Ensure the wallet is connected to the Sepolia network (chainId 11155111)
+      // Check network
       const network = await provider.getNetwork();
+      console.log("Connected network:", network);
       if (network.chainId !== 11155111) {
         try {
-          // Attempt to switch network to Sepolia
           await provider.send("wallet_switchEthereumChain", [{ chainId: SEPOLIA_CHAIN_ID_HEX }]);
         } catch (switchError: any) {
           if (switchError.code === 4902) {
-            // If Sepolia is not added in MetaMask, attempt to add it
             try {
               await provider.send("wallet_addEthereumChain", [{
                 chainId: SEPOLIA_CHAIN_ID_HEX,
@@ -78,18 +75,16 @@ const PurchaseTicket: React.FC = () => {
         }
       }
 
-      // Get the signer (connected account)
-      const signer = await provider.getSigner();
+      const signer = provider.getSigner();
       const userAddress = await signer.getAddress();
-
-      // Create a contract instance with the signer (for write operations)
       const contract = new ethers.Contract(CONTRACT_ADDRESS, TicketContractABI, signer);
 
-      // Call the mintTicket function with the user's address, sending exactly 100 wei as payment
+      // Call mintTicket with exactly 100 wei
       const tx = await contract.mintTicket(userAddress, { value: 100 });
-      setTxHash(tx.hash); // Save the transaction hash for display
-
+      setTxHash(tx.hash);
+      console.log("Transaction sent:", tx.hash);
     } catch (err: any) {
+      console.error("Error during purchase:", err);
       if (err.code === 4001) {
         setError("Request was rejected by the user.");
       } else {
@@ -101,47 +96,22 @@ const PurchaseTicket: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        maxWidth: "480px",
-        margin: "2rem auto",
-        fontFamily: "sans-serif",
-        textAlign: "center",
-      }}
-    >
+    <div style={{ maxWidth: "480px", margin: "2rem auto", fontFamily: "sans-serif", textAlign: "center" }}>
       <h2>Purchase Ticket</h2>
-
-      {ticketPrice && (
-        <p>
-          <strong>Ticket Price:</strong> {ticketPrice} wei
-        </p>
-      )}
-
+      {ticketPrice && <p><strong>Ticket Price:</strong> {ticketPrice} wei</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
-
       {txHash && (
         <p>
           ✅ Transaction sent! View on{" "}
-          <a
-            href={`https://sepolia.etherscan.io/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+          <a href={`https://sepolia.etherscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer">
             Etherscan
-          </a>
-          .
+          </a>.
         </p>
       )}
-
       <button
         onClick={handlePurchase}
         disabled={loading}
-        style={{
-          padding: "12px 20px",
-          fontSize: "16px",
-          cursor: loading ? "not-allowed" : "pointer",
-          marginTop: "1rem",
-        }}
+        style={{ padding: "12px 20px", fontSize: "16px", cursor: loading ? "not-allowed" : "pointer", marginTop: "1rem" }}
       >
         {loading ? "Purchasing..." : "Purchase Ticket"}
       </button>
