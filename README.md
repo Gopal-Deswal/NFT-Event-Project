@@ -61,6 +61,8 @@ npm run dev
 - Feedback on transaction success/failure.
 - Etherscan link for verification.
 
+VIDEO LINK : https://vimeo.com/1072784048?share=copy
+
 ## ✨ Future Improvements
 
 - Dynamic ticket pricing and multiple tiers.
