@@ -57,7 +57,7 @@ const Hero = () => {
             <Button size="lg" className="bg-purple hover:bg-purple-dark text-white px-8">
               Get Tickets
             </Button>
-            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
+            <Button size="lg" variant="outline" className="border-white text-black hover:bg-white/10">
               Learn More
             </Button>
           </div>
