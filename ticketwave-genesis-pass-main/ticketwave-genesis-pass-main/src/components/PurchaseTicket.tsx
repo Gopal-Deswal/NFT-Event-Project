@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ethers } from "ethers";
 import TicketContractABI from "../contracts/TicketContractABI.json";
+import TicketOptions from '@/components/TicketOptions';
 
 const PurchaseTicket: React.FC = () => {
   // State for feedback to the user
