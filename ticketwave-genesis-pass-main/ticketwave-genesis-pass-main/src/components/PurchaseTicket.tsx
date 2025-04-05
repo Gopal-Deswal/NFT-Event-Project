@@ -1,97 +1,111 @@
-import { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
-import EventTicketABI from '../abis/EventTicketABI.json';  // Import the ABI
+import React, { useState } from "react";
+import { ethers } from "ethers";
+import TicketContractABI from "../contracts/TicketContractABI.json";
 
-const contractAddress = '0xc4fB5755f381cdD61A28fAdA360fA26F104A542d';  // Sepolia contract
-
-function PurchaseTicket() {
-  // State variables for loading status, transaction hash, and ticket price
+const PurchaseTicket: React.FC = () => {
+  // State for feedback to the user
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [ticketPrice, setTicketPrice] = useState<string | null>(null);
 
-  useEffect(() => {
-    // On component mount, load the ticket price from the contract (read-only)
-    const fetchPrice = async () => {
-      if (typeof window.ethereum !== 'undefined') {
-        try {
-          const provider = new ethers.providers.Web3Provider(window.ethereum);
-          const contract = new ethers.Contract(contractAddress, EventTicketABI, provider);
-          const priceBN = await contract.ticketPrice();  // Fetch ticket price (BigNumber)
-          // Convert price to ether string for display (if needed)
-          const priceEther = ethers.utils.formatEther(priceBN);
-          setTicketPrice(priceEther);
-        } catch (err) {
-          console.error('Error fetching ticket price:', err);
-        }
-      }
-    };
-    fetchPrice();
-  }, []);
+  // Sepolia network chain ID (11155111) in hex, for MetaMask RPC calls
+  const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7";
+  const CONTRACT_ADDRESS = "0xc4fB5755f381cdD61A28fAdA360fA26F104A542d";
 
-  const purchaseTicket = async () => {
-    if (typeof window.ethereum === 'undefined') {
-      alert('MetaMask is required to purchase a ticket.');
+  const handlePurchase = async () => {
+    setError(null);
+    setTxHash(null);
+
+    // 1. Check for MetaMask
+    if (typeof window.ethereum === "undefined") {
+      setError("MetaMask is not installed. Please install MetaMask to continue.");
       return;
     }
+
+    setLoading(true);
     try {
-      setLoading(true);
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      // Request MetaMask accounts access
-      await provider.send('eth_requestAccounts', []);  // Prompts user to connect MetaMask&#8203;:contentReference[oaicite:2]{index=2}
-      const signer = provider.getSigner();
-      
-      // Ensure the user is on Sepolia network (optional check)
+      // 2. Connect to MetaMask via ethers provider
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);  // Request account access
+
+      // 3. Ensure the network is Sepolia (chainId 11155111)
       const network = await provider.getNetwork();
       if (network.chainId !== 11155111) {
-        alert('Please switch MetaMask to the Sepolia network.');
-        setLoading(false);
-        return;
+        try {
+          // Prompt MetaMask to switch to Sepolia
+          await provider.send("wallet_switchEthereumChain", [{ chainId: SEPOLIA_CHAIN_ID_HEX }]);
+        } catch (switchError: any) {
+          // If the network is not added in MetaMask, error code 4902 will be thrown
+          if (switchError.code === 4902) {
+            try {
+              // Prompt to add Sepolia network to MetaMask
+              await provider.send("wallet_addEthereumChain", [{
+                chainId: SEPOLIA_CHAIN_ID_HEX,
+                chainName: "Sepolia Test Network",
+                nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
+                rpcUrls: ["https://ethereum-sepolia.publicnode.com"],  // public RPC endpoint for Sepolia
+                blockExplorerUrls: ["https://sepolia.etherscan.io/"]
+              }]);
+              // After adding, try switching to Sepolia again
+              await provider.send("wallet_switchEthereumChain", [{ chainId: SEPOLIA_CHAIN_ID_HEX }]);
+            } catch (addError: any) {
+              throw new Error("Failed to add the Sepolia network. Please add it manually in MetaMask.");
+            }
+          } else if (switchError.code === 4001) {
+            // User rejected the network switch
+            throw new Error("Please switch to the Sepolia network in MetaMask to continue.");
+          } else {
+            // Other errors (could be an internal error, etc.)
+            throw new Error(`Network switch failed: ${switchError.message || switchError}`);
+          }
+        }
       }
 
-      // Instantiate contract with signer for write operation
-      const contract = new ethers.Contract(contractAddress, EventTicketABI, signer);
-      // Fetch the current ticket price (in Wei as BigNumber)
-      const priceBN = await contract.ticketPrice();
+      // 4. Invoke the smart contract function to purchase the ticket
+      const signer = await provider.getSigner();
       const userAddress = await signer.getAddress();
-      
-      // Call mintTicket, sending the value (ticket price) along with the transaction
-      const txResponse = await contract.mintTicket(userAddress, { value: priceBN });
-      setTxHash(txResponse.hash);  // Store transaction hash to display to user
-      console.log('Transaction sent, hash:', txResponse.hash);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, TicketContractABI, signer);
 
-      // Wait for transaction confirmation (optional: you could wait for at least 1 block confirmation)
-      await txResponse.wait();
-      console.log('Transaction confirmed');
-      // (You might add additional logic here for after a successful purchase, e.g., refresh UI)
-      
-    } catch (error) {
-      console.error('Transaction failed:', error);
-      alert(`Purchase failed: ${error instanceof Error ? error.message : error}`);
+      const tx = await contract.mintTicket(userAddress, { value: 100 });  // send 100 wei
+      setTxHash(tx.hash);  // Save transaction hash for confirmation display
+
+    } catch (err: any) {
+      // Handle and display errors
+      if (err.code === 4001) {
+        // EIP-1193 user rejected request (accounts or transaction)
+        setError("Request was rejected by the user.");
+      } else {
+        setError(err.message || "Transaction failed.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div>
-      {/* Display the ticket price if available */}
-      {ticketPrice && <p>Ticket Price: {ticketPrice} ETH</p>}
-
-      {/* Purchase button triggers the purchaseTicket function */}
-      <button onClick={purchaseTicket} disabled={loading}>
-        {loading ? 'Purchasing…' : 'Purchase Ticket'}
-      </button>
-
-      {/* Show loading state or transaction result messages */}
-      {loading && <p>Transaction is being processed...</p>}
-      {txHash && !loading && (
+    <div style={{ maxWidth: "480px", margin: "2rem auto", fontFamily: "sans-serif", textAlign: "center" }}>
+      <h2>Purchase Ticket</h2>
+      {/* Status messages */}
+      {error && <p style={{ color: "red" }}>{error}</p>}
+      {txHash && (
         <p>
-          ✅ Transaction sent! Hash: <a href={`https://sepolia.etherscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer">{txHash}</a>
+          ✅ Transaction sent! View on{" "}
+          <a href={`https://sepolia.etherscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer">
+            Etherscan
+          </a>
+          .
         </p>
       )}
+      {/* Purchase button */}
+      <button 
+        onClick={handlePurchase}
+        disabled={loading}
+        style={{ padding: "12px 20px", fontSize: "16px", cursor: loading ? "not-allowed" : "pointer" }}
+      >
+        {loading ? "Purchasing..." : "Purchase Ticket"}
+      </button>
     </div>
   );
-}
+};
 
 export default PurchaseTicket;
