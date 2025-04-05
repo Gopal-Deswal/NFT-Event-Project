@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ethers } from "ethers";
 import TicketContractABI from "../contracts/TicketContractABI.json";
-import TicketOptions from '@/components/TicketOptions';
+import TicketOptions from "@/components/TicketOptions";
 
 const PurchaseTicket: React.FC = () => {
   // State for feedback to the user
@@ -44,7 +44,7 @@ const PurchaseTicket: React.FC = () => {
                 chainId: SEPOLIA_CHAIN_ID_HEX,
                 chainName: "Sepolia Test Network",
                 nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
-                rpcUrls: ["https://ethereum-sepolia.publicnode.com"],  // public RPC endpoint for Sepolia
+                rpcUrls: ["https://ethereum-sepolia.publicnode.com"],
                 blockExplorerUrls: ["https://sepolia.etherscan.io/"]
               }]);
               // After adding, try switching to Sepolia again
@@ -56,7 +56,6 @@ const PurchaseTicket: React.FC = () => {
             // User rejected the network switch
             throw new Error("Please switch to the Sepolia network in MetaMask to continue.");
           } else {
-            // Other errors (could be an internal error, etc.)
             throw new Error(`Network switch failed: ${switchError.message || switchError}`);
           }
         }
@@ -67,13 +66,12 @@ const PurchaseTicket: React.FC = () => {
       const userAddress = await signer.getAddress();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, TicketContractABI, signer);
 
-      const tx = await contract.mintTicket(userAddress, { value: 100 });  // send 100 wei
+      // Here, we call mintTicket with the user's address, sending exactly 100 wei.
+      const tx = await contract.mintTicket(userAddress, { value: 100 });
       setTxHash(tx.hash);  // Save transaction hash for confirmation display
 
     } catch (err: any) {
-      // Handle and display errors
       if (err.code === 4001) {
-        // EIP-1193 user rejected request (accounts or transaction)
         setError("Request was rejected by the user.");
       } else {
         setError(err.message || "Transaction failed.");
@@ -86,6 +84,10 @@ const PurchaseTicket: React.FC = () => {
   return (
     <div style={{ maxWidth: "480px", margin: "2rem auto", fontFamily: "sans-serif", textAlign: "center" }}>
       <h2>Purchase Ticket</h2>
+
+      {/* Render Ticket Options (the custom checkbox component) */}
+      <TicketOptions />
+
       {/* Status messages */}
       {error && <p style={{ color: "red" }}>{error}</p>}
       {txHash && (
@@ -97,11 +99,12 @@ const PurchaseTicket: React.FC = () => {
           .
         </p>
       )}
+
       {/* Purchase button */}
       <button 
         onClick={handlePurchase}
         disabled={loading}
-        style={{ padding: "12px 20px", fontSize: "16px", cursor: loading ? "not-allowed" : "pointer" }}
+        style={{ padding: "12px 20px", fontSize: "16px", cursor: loading ? "not-allowed" : "pointer", marginTop: "1rem" }}
       >
         {loading ? "Purchasing..." : "Purchase Ticket"}
       </button>
